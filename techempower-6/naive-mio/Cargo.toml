@@ -1,0 +1,9 @@
+[package]
+name = "techempower-6-naive-mio"
+version = "0.1.0"
+authors = ["Aaron Turon <aturon@mozilla.com>"]
+
+[dependencies]
+mio = "0.5"
+httparse = "1.1"
+time = "0.1"
