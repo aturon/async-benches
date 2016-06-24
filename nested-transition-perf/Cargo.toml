@@ -1,0 +1,6 @@
+[package]
+name = "nested-transition-perf"
+version = "0.1.0"
+authors = ["Aaron Turon <aturon@mozilla.com>"]
+
+[dependencies]
