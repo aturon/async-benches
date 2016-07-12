@@ -1,5 +1,5 @@
 [root]
-name = "mio-techempower-6"
+name = "techempower-6-naive-mio"
 version = "0.1.0"
 dependencies = [
  "httparse 1.1.2 (registry+https://github.com/rust-lang/crates.io-index)",

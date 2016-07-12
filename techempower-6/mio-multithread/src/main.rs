@@ -9,6 +9,7 @@ extern crate time;
 
 use std::ascii::AsciiExt;
 use std::cell::UnsafeCell;
+use std::env;
 use std::io::{self, Read, Write};
 use std::mem;
 use std::net::SocketAddr;
@@ -507,7 +508,8 @@ fn main() {
     env_logger::init().unwrap();
 
     let poll = Arc::new(mio::Poll::new().unwrap());
-    let addr: SocketAddr = "127.0.0.1:8080".parse().unwrap();
+    let addr = env::args().nth(1).unwrap_or("127.0.0.1:8080".to_string());
+    let addr = addr.parse::<SocketAddr>().unwrap();
     let listener = TcpListener::bind(&addr).unwrap();
     poll.register(&listener,
                   LISTENER,

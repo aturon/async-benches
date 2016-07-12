@@ -9,6 +9,7 @@ extern crate slab;
 extern crate time;
 
 use std::ascii::AsciiExt;
+use std::env;
 use std::io::{self, Read, Write};
 use std::mem;
 use std::net::SocketAddr;
@@ -394,7 +395,8 @@ fn main() {
     let threads = (0..num_cpus::get()).map(|_| {
         thread::spawn(|| {
             let poll = mio::Poll::new().unwrap();
-            let addr: SocketAddr = "127.0.0.1:8080".parse().unwrap();
+            let addr = env::args().nth(1).unwrap_or("127.0.0.1:8080".to_string());
+            let addr = addr.parse::<SocketAddr>().unwrap();
             let socket = net2::TcpBuilder::new_v4().unwrap();
             socket.reuse_address(true).unwrap();
             socket.reuse_port(true).unwrap();

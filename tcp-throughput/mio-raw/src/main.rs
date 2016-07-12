@@ -1,5 +1,6 @@
 extern crate mio;
 
+use std::env;
 use std::net::SocketAddr;
 use std::sync::atomic::*;
 use std::thread;
@@ -18,7 +19,8 @@ fn main() {
         }
     });
 
-    let addr: SocketAddr = "127.0.0.1:12345".parse().unwrap();
+    let addr = env::args().nth(1).unwrap_or("127.0.0.1:12345".to_string());
+    let addr = addr.parse::<SocketAddr>().unwrap();
     let mut conn = TcpStream::connect(&addr).unwrap();
 
     let mut poll = Poll::new().unwrap();

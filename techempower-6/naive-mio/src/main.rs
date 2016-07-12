@@ -2,8 +2,9 @@ extern crate time;
 extern crate mio;
 extern crate httparse;
 
-use std::net::SocketAddr;
+use std::env;
 use std::fmt::Write;
+use std::net::SocketAddr;
 
 use mio::{Handler, EventLoop, Token, EventSet, PollOpt, TryRead, TryWrite};
 use mio::tcp::*;
@@ -250,7 +251,8 @@ fn write(socket: &mut TcpStream, output: &mut Output, event_loop: &mut EventLoop
 
 // ab -c 8 -n 10000 localhost:8080/plaintext
 fn main() {
-    let addr: SocketAddr = "127.0.0.1:8080".parse().unwrap();
+    let addr = env::args().nth(1).unwrap_or("127.0.0.1:8080".to_string());
+    let addr = addr.parse::<SocketAddr>().unwrap();
     let listener = TcpListener::bind(&addr).unwrap();
     let mut event_loop = mio::EventLoop::new().unwrap();
     event_loop.register(&listener,
