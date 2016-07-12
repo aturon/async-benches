@@ -1,0 +1,15 @@
+language: rust
+rust:
+  - stable
+  - beta
+  - nightly
+sudo: false
+script:
+  - export CARGO_TARGET_DIR=`pwd`/target
+  - cargo build --manifest-path techempower-6/naive-mio
+  - cargo build --manifest-path techempower-6/mio-singlethread
+  - cargo build --manifest-path techempower-6/mio-multithread-unix
+  - cargo build --manifest-path techempower-6/mio-multithread
+notifications:
+  email:
+    on_success: never
