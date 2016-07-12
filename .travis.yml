@@ -6,10 +6,15 @@ rust:
 sudo: false
 script:
   - export CARGO_TARGET_DIR=`pwd`/target
-  - cargo build --manifest-path techempower-6/naive-mio
-  - cargo build --manifest-path techempower-6/mio-singlethread
-  - cargo build --manifest-path techempower-6/mio-multithread-unix
-  - cargo build --manifest-path techempower-6/mio-multithread
+
+  - cargo build --manifest-path techempower-6/naive-mio/Cargo.toml
+  - cargo build --manifest-path techempower-6/mio-singlethread/Cargo.toml
+  - cargo build --manifest-path techempower-6/mio-multithread-unix/Cargo.toml
+  - cargo build --manifest-path techempower-6/mio-multithread/Cargo.toml
+
+  - cargo build --manifest-path tcp-throughput/mio-raw/Cargo.toml
+  - cargo build --manifest-path tcp-throughput/std/Cargo.toml
+  - cargo build --manifest-path tcp-throughput/server/Cargo.toml
 notifications:
   email:
     on_success: never
