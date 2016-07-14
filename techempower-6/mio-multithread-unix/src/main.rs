@@ -46,7 +46,7 @@ impl<'a> Server<'a> {
              events: EventSet) {
         debug!("{:?} {:?}", token, events);
         if token == LISTENER {
-            if let Ok(Some(socket)) = self.listener.accept() {
+            while let Ok(Some(socket)) = self.listener.accept() {
                 debug!("accepted");
                 self.count += 1;
                 // socket.0.set_nodelay(true).unwrap();

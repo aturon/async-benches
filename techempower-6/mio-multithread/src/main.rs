@@ -65,7 +65,7 @@ impl Server {
              events: EventSet) {
         debug!("srv[{}] - {:?} {:?}", idx, token, events);
         if token == LISTENER {
-            if let Ok(Some(socket)) = self.listener.accept() {
+            while let Ok(Some(socket)) = self.listener.accept() {
                 debug!("accepted");
                 let token = self.insert(socket.0);
                 self.try_connection(poll, token, EventSet::all());
