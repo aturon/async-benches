@@ -1,0 +1,10 @@
+[package]
+name = "hyper-bench"
+version = "0.1.0"
+authors = ["Alex Crichton <alex@alexcrichton.com>"]
+
+[dependencies]
+hyper = { git = "https://github.com/hyperium/hyper", rev = "6d54a4df" }
+log = "0.3"
+env_logger = "0.3"
+mime = "*"
