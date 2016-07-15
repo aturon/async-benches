@@ -9,6 +9,7 @@ extern crate time;
 use std::ascii::AsciiExt;
 use std::env;
 use std::io::{self, Read, Write};
+use std::fmt;
 use std::mem;
 use std::net::SocketAddr;
 use std::slice;
@@ -52,14 +53,14 @@ impl<'a> Server<'a> {
                               token,
                               EventSet::readable() | EventSet::writable(),
                               PollOpt::edge()).unwrap();
-                self.try_connection(poll, token, EventSet::all());
+                self.try_connection(token, EventSet::all());
             }
         } else {
-            self.try_connection(poll, token, events);
+            self.try_connection(token, events);
         }
     }
 
-    fn try_connection(&mut self, poll: &Poll, token: Token, events: EventSet) {
+    fn try_connection(&mut self, token: Token, events: EventSet) {
         let res = self.connections[token].ready(events);
 
         if res.is_err() || self.connections[token].closed {
@@ -289,7 +290,9 @@ impl Response {
     }
 
     fn to_bytes(&self, into: &mut Vec<u8>) {
-        write!(into, "\
+        use std::fmt::Write;
+
+        write!(FastWrite(into), "\
             HTTP/1.1 200 OK\r\n\
             Server: Example\r\n\
             Date: {}\r\n\
@@ -303,6 +306,20 @@ impl Response {
         }
         extend(into, b"\r\n");
         extend(into, self.response.as_bytes());
+    }
+}
+
+// TODO: impl fmt::Write for Vec<u8>
+//
+// Right now `write!` on `Vec<u8>` goes through io::Write and is not super
+// speedy, so inline a less-crufty implementation here which doesn't go through
+// io::Error.
+struct FastWrite<'a>(&'a mut Vec<u8>);
+
+impl<'a> fmt::Write for FastWrite<'a> {
+    fn write_str(&mut self, s: &str) -> fmt::Result {
+        extend(self.0, s.as_bytes());
+        Ok(())
     }
 }
 
