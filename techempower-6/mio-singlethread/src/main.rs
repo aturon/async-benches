@@ -48,6 +48,10 @@ impl<'a> Server<'a> {
                 let token = self.connections
                     .insert_with(move |_| Connection::new(socket.0))
                     .unwrap();
+                poll.register(&self.connections[token].socket,
+                              token,
+                              EventSet::readable() | EventSet::writable(),
+                              PollOpt::edge()).unwrap();
                 self.try_connection(poll, token, EventSet::all());
             }
         } else {
@@ -65,8 +69,6 @@ impl<'a> Server<'a> {
             }
             debug!("removing");
             self.connections.remove(token);
-        } else {
-            self.connections[token].reregister(poll, token).unwrap();
         }
     }
 }
@@ -77,8 +79,8 @@ struct Connection {
     output: Output,
     keepalive: bool,
     closed: bool,
-    first: bool,
     read_closed: bool,
+    events: EventSet,
 }
 
 struct Output {
@@ -96,14 +98,17 @@ impl Connection {
             keepalive: false,
             read_closed: false,
             closed: false,
-            first: true,
+            events: EventSet::none(),
         }
     }
 
     fn ready(&mut self, events: EventSet) -> io::Result<()> {
-        while events.is_readable() && !self.read_closed {
+        self.events = self.events | events;
+        while self.events.is_readable() && !self.read_closed {
             let before = self.input.len();
-            let eof = try!(read(&mut self.socket, &mut self.input));
+            let eof = try!(read(&mut self.socket,
+                                &mut self.input,
+                                &mut self.events));
             if eof {
                 debug!("eof");
             }
@@ -143,8 +148,10 @@ impl Connection {
             }
         }
 
-        if events.is_writable() && self.output.buf.len() > 0 {
-            let done = try!(write(&mut self.socket, &mut self.output));
+        if self.events.is_writable() && self.output.buf.len() > 0 {
+            let done = try!(write(&mut self.socket,
+                                  &mut self.output,
+                                  &mut self.events));
             if done {
                 debug!("wrote response");
                 if !self.keepalive || self.read_closed {
@@ -158,35 +165,13 @@ impl Connection {
         }
         Ok(())
     }
-
-    fn reregister(&mut self, poll: &Poll, token: Token) -> io::Result<()> {
-        assert!(!self.closed);
-        debug!("register");
-        let events = if self.output.buf.len() > 0 {
-            if self.read_closed {
-                EventSet::writable()
-            } else {
-                EventSet::writable() | EventSet::readable()
-            }
-        } else {
-            assert!(!self.read_closed);
-            EventSet::readable()
-        };
-        let opts = PollOpt::edge() | PollOpt::oneshot();
-        if self.first {
-            self.first = false;
-            poll.register(&self.socket, token, events, opts)
-        } else {
-            poll.reregister(&self.socket, token, events, opts)
-        }
-    }
 }
 
 fn process(r: &Request) -> Response {
     assert!(r.path() == "/plaintext");
     let mut r = Response::new();
     r.header("Content-Type", "text/plain; charset=UTF-8")
-     .body("Hello, World!\r\n");
+     .body("Hello, World!");
     return r
 }
 
@@ -334,20 +319,21 @@ fn extend(dst: &mut Vec<u8>, data: &[u8]) {
     }
 }
 
-fn read(socket: &mut TcpStream, input: &mut Vec<u8>) -> io::Result<bool> {
-    loop {
-        match socket.read(unsafe { slice_to_end(input) }) {
-            Ok(0) => return Ok(true),
-            Ok(n) => {
-                let len = input.len();
-                unsafe { input.set_len(len + n); }
-                return Ok(false)
-            }
-            Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => {
-                return Ok(false)
-            }
-            Err(e) => return Err(e),
+fn read(socket: &mut TcpStream,
+        input: &mut Vec<u8>,
+        events: &mut EventSet) -> io::Result<bool> {
+    match socket.read(unsafe { slice_to_end(input) }) {
+        Ok(0) => return Ok(true),
+        Ok(n) => {
+            let len = input.len();
+            unsafe { input.set_len(len + n); }
+            return Ok(false)
         }
+        Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => {
+            *events = *events & !EventSet::readable();
+            return Ok(false)
+        }
+        Err(e) => return Err(e),
     }
 
     unsafe fn slice_to_end(v: &mut Vec<u8>) -> &mut [u8] {
@@ -363,7 +349,9 @@ fn read(socket: &mut TcpStream, input: &mut Vec<u8>) -> io::Result<bool> {
     }
 }
 
-fn write(socket: &mut TcpStream, output: &mut Output) -> io::Result<bool> {
+fn write(socket: &mut TcpStream,
+         output: &mut Output,
+         events: &mut EventSet) -> io::Result<bool> {
     assert!(output.buf.len() > 0);
     loop {
         match socket.write(&output.buf) {
@@ -377,6 +365,7 @@ fn write(socket: &mut TcpStream, output: &mut Output) -> io::Result<bool> {
                 }
             }
             Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => {
+                *events = *events & !EventSet::writable();
                 return Ok(false)
             }
             Err(e) => return Err(e),
