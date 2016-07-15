@@ -8,10 +8,11 @@ extern crate time;
 
 use std::ascii::AsciiExt;
 use std::env;
-use std::io::{self, Read, Write};
 use std::fmt;
+use std::io::{self, Read, Write};
 use std::mem;
 use std::net::SocketAddr;
+use std::panic;
 use std::slice;
 use std::str;
 
@@ -61,7 +62,10 @@ impl<'a> Server<'a> {
     }
 
     fn try_connection(&mut self, token: Token, events: EventSet) {
-        let res = self.connections[token].ready(events);
+        // Simulate a `catch_unwind` that a real server would do anyway
+        let res = panic::catch_unwind(panic::AssertUnwindSafe(|| {
+            self.connections[token].ready(events)
+        })).expect("oh no it panicked!");
 
         if res.is_err() || self.connections[token].closed {
             if let Err(ref e) = res {
