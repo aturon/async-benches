@@ -10,6 +10,7 @@ extern crate time;
 use std::ascii::AsciiExt;
 use std::cell::UnsafeCell;
 use std::env;
+use std::fmt;
 use std::io::{self, Read, Write};
 use std::mem;
 use std::net::SocketAddr;
@@ -155,6 +156,14 @@ impl Server {
             remove = remove || {
                 let conn = conn.as_mut().expect("conn is none");
 
+                if conn.first {
+                    poll.register(&conn.socket,
+                                  token,
+                                  EventSet::readable() | EventSet::writable(),
+                                  PollOpt::edge()).unwrap();
+                    conn.first = false;
+                }
+
                 let res = conn.ready(events);
 
                 if res.is_err() || conn.closed {
@@ -164,7 +173,6 @@ impl Server {
                     debug!("removing");
                     true
                 } else {
-                    conn.reregister(poll, token).unwrap();
                     false
                 }
             };
@@ -197,6 +205,7 @@ struct Connection {
     output: Output,
     keepalive: bool,
     closed: bool,
+    events: EventSet,
     first: bool,
     read_closed: bool,
 }
@@ -217,13 +226,17 @@ impl Connection {
             read_closed: false,
             closed: false,
             first: true,
+            events: EventSet::none(),
         }
     }
 
     fn ready(&mut self, events: EventSet) -> io::Result<()> {
-        while events.is_readable() && !self.read_closed {
+        self.events = self.events | events;
+        while self.events.is_readable() && !self.read_closed {
             let before = self.input.len();
-            let eof = try!(read(&mut self.socket, &mut self.input));
+            let eof = try!(read(&mut self.socket,
+                                &mut self.input,
+                                &mut self.events));
             if eof {
                 debug!("eof");
             }
@@ -263,8 +276,10 @@ impl Connection {
             }
         }
 
-        if events.is_writable() && self.output.buf.len() > 0 {
-            let done = try!(write(&mut self.socket, &mut self.output));
+        if self.events.is_writable() && self.output.buf.len() > 0 {
+            let done = try!(write(&mut self.socket,
+                                  &mut self.output,
+                                  &mut self.events));
             if done {
                 debug!("wrote response");
                 if !self.keepalive || self.read_closed {
@@ -278,35 +293,13 @@ impl Connection {
         }
         Ok(())
     }
-
-    fn reregister(&mut self, poll: &Poll, token: Token) -> io::Result<()> {
-        assert!(!self.closed);
-        debug!("register");
-        let events = if self.output.buf.len() > 0 {
-            if self.read_closed {
-                EventSet::writable()
-            } else {
-                EventSet::writable() | EventSet::readable()
-            }
-        } else {
-            assert!(!self.read_closed);
-            EventSet::readable()
-        };
-        let opts = PollOpt::edge() | PollOpt::oneshot();
-        if self.first {
-            self.first = false;
-            poll.register(&self.socket, token, events, opts)
-        } else {
-            poll.reregister(&self.socket, token, events, opts)
-        }
-    }
 }
 
 fn process(r: &Request) -> Response {
     assert!(r.path() == "/plaintext");
     let mut r = Response::new();
     r.header("Content-Type", "text/plain; charset=UTF-8")
-     .body("Hello, World!\r\n");
+     .body("Hello, World!");
     return r
 }
 
@@ -424,7 +417,9 @@ impl Response {
     }
 
     fn to_bytes(&self, into: &mut Vec<u8>) {
-        write!(into, "\
+        use std::fmt::Write;
+
+        write!(FastWrite(into), "\
             HTTP/1.1 200 OK\r\n\
             Server: Example\r\n\
             Date: {}\r\n\
@@ -441,6 +436,20 @@ impl Response {
     }
 }
 
+// TODO: impl fmt::Write for Vec<u8>
+//
+// Right now `write!` on `Vec<u8>` goes through io::Write and is not super
+// speedy, so inline a less-crufty implementation here which doesn't go through
+// io::Error.
+struct FastWrite<'a>(&'a mut Vec<u8>);
+
+impl<'a> fmt::Write for FastWrite<'a> {
+    fn write_str(&mut self, s: &str) -> fmt::Result {
+        extend(self.0, s.as_bytes());
+        Ok(())
+    }
+}
+
 // TODO: why does extend_from_slice not optimize?
 fn extend(dst: &mut Vec<u8>, data: &[u8]) {
     use std::ptr;
@@ -454,20 +463,21 @@ fn extend(dst: &mut Vec<u8>, data: &[u8]) {
     }
 }
 
-fn read(socket: &mut TcpStream, input: &mut Vec<u8>) -> io::Result<bool> {
-    loop {
-        match socket.read(unsafe { slice_to_end(input) }) {
-            Ok(0) => return Ok(true),
-            Ok(n) => {
-                let len = input.len();
-                unsafe { input.set_len(len + n); }
-                return Ok(false)
-            }
-            Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => {
-                return Ok(false)
-            }
-            Err(e) => return Err(e),
+fn read(socket: &mut TcpStream,
+        input: &mut Vec<u8>,
+        events: &mut EventSet) -> io::Result<bool> {
+    match socket.read(unsafe { slice_to_end(input) }) {
+        Ok(0) => return Ok(true),
+        Ok(n) => {
+            let len = input.len();
+            unsafe { input.set_len(len + n); }
+            return Ok(false)
         }
+        Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => {
+            *events = *events & !EventSet::readable();
+            return Ok(false)
+        }
+        Err(e) => return Err(e),
     }
 
     unsafe fn slice_to_end(v: &mut Vec<u8>) -> &mut [u8] {
@@ -483,7 +493,9 @@ fn read(socket: &mut TcpStream, input: &mut Vec<u8>) -> io::Result<bool> {
     }
 }
 
-fn write(socket: &mut TcpStream, output: &mut Output) -> io::Result<bool> {
+fn write(socket: &mut TcpStream,
+         output: &mut Output,
+         events: &mut EventSet) -> io::Result<bool> {
     assert!(output.buf.len() > 0);
     loop {
         match socket.write(&output.buf) {
@@ -497,12 +509,14 @@ fn write(socket: &mut TcpStream, output: &mut Output) -> io::Result<bool> {
                 }
             }
             Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => {
+                *events = *events & !EventSet::writable();
                 return Ok(false)
             }
             Err(e) => return Err(e),
         }
     }
 }
+
 
 fn main() {
     env_logger::init().unwrap();
