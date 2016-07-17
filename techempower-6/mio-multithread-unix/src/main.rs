@@ -1,5 +1,6 @@
 #[macro_use]
 extern crate log;
+extern crate mio_multithread_unix;
 extern crate env_logger;
 extern crate httparse;
 extern crate mio;
@@ -306,7 +307,7 @@ impl Response {
             Server: Example\r\n\
             Date: {}\r\n\
             Content-Length: {}\r\n\
-        ", time::now().rfc822(), self.response.len()).unwrap();
+        ", mio_multithread_unix::date::now(), self.response.len()).unwrap();
         for &(ref k, ref v) in &self.headers {
             extend(into, k.as_bytes());
             extend(into, b": ");
