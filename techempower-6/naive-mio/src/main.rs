@@ -228,6 +228,11 @@ fn read(socket: &mut TcpStream, input: &mut Input, event_loop: &mut EventLoop<Se
             false
         }
 
+        // move forward in case of unexpected eof
+        Some(0) => {
+            true
+        }
+
         // read `n`, attempt parse
         Some(n) => {
             parse(input).is_some()
