@@ -10,10 +10,5 @@ slab = "0.1"
 log = "0.3"
 net2 = "0.2"
 num_cpus = "0.2"
-
-# As of 2016-07-11 the Poll and Events types are separate, but there's a PR to
-# not do this
-mio = { git = "https://github.com/alexcrichton/mio", branch = "separate-poll-events" }
-
-# As of 2016-07-11 there's a perf win to one of the Display implementations
-time = { git = "https://github.com/rust-lang/time" }
+mio = { git = "https://github.com/carllerche/mio" }
+time = "0.1"

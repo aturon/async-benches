@@ -6,7 +6,7 @@ use std::sync::atomic::*;
 use std::thread;
 use std::time::Duration;
 
-use mio::{Poll, EventSet, Token, PollOpt, TryRead};
+use mio::{Poll, Events, EventSet, Token, PollOpt, TryRead};
 use mio::tcp::TcpStream;
 
 static AMT: AtomicUsize = ATOMIC_USIZE_INIT;
@@ -23,7 +23,8 @@ fn main() {
     let addr = addr.parse::<SocketAddr>().unwrap();
     let mut conn = TcpStream::connect(&addr).unwrap();
 
-    let mut poll = Poll::new().unwrap();
+    let poll = Poll::new().unwrap();
+    let mut events = Events::new();
 
     poll.register(&conn,
                   Token(0),
@@ -32,7 +33,7 @@ fn main() {
 
     let mut buf = [0; 64 * 1024];
     loop {
-        poll.poll(None).unwrap();
+        poll.poll(&mut events, None).unwrap();
 
         while let Some(n) = conn.try_read(&mut buf).unwrap() {
             AMT.fetch_add(n, Ordering::SeqCst);

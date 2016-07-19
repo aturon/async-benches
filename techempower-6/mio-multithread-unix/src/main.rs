@@ -31,7 +31,7 @@ const LISTENER: mio::Token = mio::Token(0);
 struct Server<'a> {
     count: u64,
     listener: &'a TcpListener,
-    connections: Slab<Connection, mio::Token>,
+    connections: Slab<Connection, usize>,
 }
 
 impl<'a> Server<'a> {
@@ -39,7 +39,7 @@ impl<'a> Server<'a> {
         Server {
             count: 0,
             listener: listener,
-            connections: Slab::new_starting_at(mio::Token(1), 1024),
+            connections: Slab::new_starting_at(1, 1024),
         }
     }
 
@@ -56,7 +56,8 @@ impl<'a> Server<'a> {
                 let token = self.connections
                     .insert_with(move |_| Connection::new(socket.0))
                     .unwrap();
-                poll.register(&self.connections[token].socket,
+                let token = mio::Token(token);
+                poll.register(&self.connections[token.into()].socket,
                               token,
                               EventSet::readable() | EventSet::writable(),
                               PollOpt::edge()).unwrap();
@@ -68,6 +69,7 @@ impl<'a> Server<'a> {
     }
 
     fn try_connection(&mut self, token: Token, events: EventSet) {
+        let token = token.into();
         // Simulate a `catch_unwind` that a real server would do anyway
         let res = panic::catch_unwind(panic::AssertUnwindSafe(|| {
             self.connections[token].ready(events)

@@ -10,10 +10,7 @@ slab = "0.1"
 log = "0.3"
 net2 = "0.2"
 num_cpus = "0.2"
+time = "0.1"
 
-# As of 2016-07-11 the Poll and Events types are separate, but there's a PR to
-# not do this
-mio = { git = "https://github.com/alexcrichton/mio", branch = "separate-poll-events" }
-
-# As of 2016-07-11 there's a perf win to one of the Display implementations
-time = { git = "https://github.com/rust-lang/time" }
+# As of 2016-07-19 Poll isn't Sync, so let's just pray that it is!
+mio = { git = "https://github.com/alexcrichton/mio", branch = "poll-sync" }

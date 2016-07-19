@@ -119,7 +119,7 @@ impl Server {
     }
 
     fn try_connection(&self, poll: &Poll, token: Token, events: EventSet) {
-        let idx = token.as_usize() - 1;
+        let idx = usize::from(token) - 1;
 
         // make sure slot is in use
         let slot = &self.connections[idx];
