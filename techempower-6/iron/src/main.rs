@@ -4,6 +4,7 @@ use std::net::SocketAddr;
 use std::env;
 
 use iron::prelude::*;
+use iron::Protocol;
 use iron::mime::{self, Mime};
 use iron::mime::TopLevel::Text;
 use iron::mime::SubLevel::Plain;
@@ -21,5 +22,5 @@ fn main() {
                            Header(Server("Example".to_string())),
                            status::Ok,
                            "Hello, World!")))
-    }).http(&addr).unwrap();
+    }).listen_with(&addr, 1, Protocol::Http, None).unwrap();
 }
