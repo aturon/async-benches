@@ -1,12 +1,13 @@
 extern crate mio;
 
 use std::env;
+use std::io::Read;
 use std::net::SocketAddr;
 use std::sync::atomic::*;
 use std::thread;
 use std::time::Duration;
 
-use mio::{Poll, Events, EventSet, Token, PollOpt, TryRead};
+use mio::{Poll, Events, EventSet, Token, PollOpt};
 use mio::tcp::TcpStream;
 
 static AMT: AtomicUsize = ATOMIC_USIZE_INIT;
@@ -35,7 +36,7 @@ fn main() {
     loop {
         poll.poll(&mut events, None).unwrap();
 
-        while let Some(n) = conn.try_read(&mut buf).unwrap() {
+        while let Ok(n) = conn.read(&mut buf) {
             AMT.fetch_add(n, Ordering::SeqCst);
         }
     }
