@@ -4,7 +4,6 @@ extern crate hyper;
 extern crate env_logger;
 extern crate mime;
 
-use std::io::Write;
 use std::env;
 use std::net::SocketAddr;
 
@@ -15,7 +14,7 @@ use mime::SubLevel::Plain;
 use hyper::{RequestUri, Decoder, Encoder, Next};
 use hyper::header::{ContentLength, ContentType, Server as ServerHeader};
 use hyper::net::HttpStream;
-use hyper::server::{Server, Handler, Request, Response};
+use hyper::server::{Server, Handler, Request, Response, HttpListener};
 
 struct Plaintext;
 
@@ -58,8 +57,20 @@ fn main() {
 
     let addr = env::args().nth(1).unwrap_or("127.0.0.1:8080".to_string());
     let addr = addr.parse::<SocketAddr>().unwrap();
-    let server = Server::http(&addr).unwrap();
-    let (listening, server) = server.handle(|_| Plaintext).unwrap();
-    println!("Listening on http://{}", listening);
-    server.run();
+
+    let listener = HttpListener::bind(&addr).unwrap();
+    let mut handles = Vec::new();
+
+    for _ in 0..8 {
+        let listener = listener.try_clone().unwrap();
+        handles.push(::std::thread::spawn(move || {
+            Server::new(listener)
+                .handle(|_| Plaintext).unwrap();
+        }));
+    }
+    println!("Listening on http://127.0.0.1:3000");
+
+    for handle in handles {
+        handle.join().unwrap();
+    }
 }
